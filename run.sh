@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONFIG="$SCRIPT_DIR/config.json"
+LOCK_FILE="$SCRIPT_DIR/.lock"
+
+INTERVAL=$(jq -r '.polling.intervalSeconds' "$CONFIG")
+MAX_TURNS=$(jq -r '.claude.maxTurns' "$CONFIG")
+MODEL=$(jq -r '.claude.model' "$CONFIG")
+
+log() {
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
+}
+
+cleanup() {
+  rm -f "$LOCK_FILE"
+  log "Shutting down."
+  exit 0
+}
+trap cleanup SIGINT SIGTERM
+
+# Prevent concurrent runs
+if [ -f "$LOCK_FILE" ]; then
+  pid=$(cat "$LOCK_FILE")
+  if kill -0 "$pid" 2>/dev/null; then
+    log "Another instance is running (PID $pid). Exiting."
+    exit 1
+  else
+    log "Stale lock file found. Removing."
+    rm -f "$LOCK_FILE"
+  fi
+fi
+echo $$ > "$LOCK_FILE"
+
+log "Dev bot started. Polling every ${INTERVAL}s."
+
+while true; do
+  log "Running agent..."
+
+  cd "$SCRIPT_DIR"
+
+  # Collect all persona MCP configs
+  MCP_ARGS=()
+  for MCP_FILE in "$SCRIPT_DIR"/personas/*/mcp.json; do
+    [ -f "$MCP_FILE" ] && MCP_ARGS+=(--mcp-config "$MCP_FILE")
+  done
+
+  claude --print \
+    --verbose \
+    --output-format stream-json \
+    --max-turns "$MAX_TURNS" \
+    --model "$MODEL" \
+    "${MCP_ARGS[@]}" \
+    --allowedTools "Edit" "Write" "Read" "Glob" "Grep" "Bash" "LSP" \
+      "mcp__mcp-atlassian__jira_search" "mcp__mcp-atlassian__jira_get_issue" \
+      "mcp__mcp-atlassian__jira_add_comment" "mcp__mcp-atlassian__jira_update_issue" \
+      "mcp__hcc-patternfly-data-view__*" \
+    -- "Follow the instructions in CLAUDE.md" 2>&1 | tee -a "$SCRIPT_DIR/bot.log" || {
+    log "Agent run failed"
+  }
+
+  log "Sleeping for ${INTERVAL}s..."
+  sleep "$INTERVAL"
+done

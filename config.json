@@ -1,0 +1,13 @@
+{
+  "jira": {
+    "boardKey": "RHCLOUD",
+    "labels": ["platform-experience-services", "hcc-ai-framework"]
+  },
+  "claude": {
+    "maxTurns": 25,
+    "model": "claude-opus-4-6"
+  },
+  "polling": {
+    "intervalSeconds": 300
+  }
+}

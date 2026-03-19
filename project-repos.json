@@ -1,0 +1,10 @@
+{
+  "insights-chrome": {
+    "url": "git@github.com:RedHatInsights/insights-chrome.git",
+    "persona": "frontend"
+  },
+  "astro-virtual-assistant-frontend": {
+    "url": "git@github.com:RedHatInsights/astro-virtual-assistant-frontend.git",
+    "persona": "frontend"
+  }
+}

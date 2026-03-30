@@ -72,6 +72,7 @@ button:hover { opacity: .9; }
 /* Split layout for panels with detail */
 .split-layout { display: flex; gap: 16px; }
 .split-layout > :first-child { flex: 1; min-width: 0; }
+.list-col { display: flex; flex-direction: column; min-width: 0; }
 .split-layout.no-detail > :first-child { flex: 1; }
 .split-layout.no-detail > .detail-panel { display: none; }
 

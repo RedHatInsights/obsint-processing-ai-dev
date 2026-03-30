@@ -98,13 +98,7 @@ async function loadStats() {
 
 // Pagination helper
 function renderPagination(containerId, total, limit, offset, loadFn) {
-  let pag = document.getElementById(containerId + '-pag');
-  if (!pag) {
-    pag = document.createElement('div');
-    pag.id = containerId + '-pag';
-    pag.className = 'pagination';
-    document.getElementById(containerId).after(pag);
-  }
+  const pag = document.getElementById(containerId + '-pag');
   const page = Math.floor(offset / limit) + 1;
   const pages = Math.ceil(total / limit);
   if (pages <= 1) { pag.innerHTML = ''; return; }

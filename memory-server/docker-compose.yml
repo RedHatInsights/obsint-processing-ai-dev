@@ -1,0 +1,28 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_DB: bot_memory
+      POSTGRES_USER: bot
+      POSTGRES_PASSWORD: bot
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bot -d bot_memory"]
+      interval: 5s
+      retries: 5
+
+  memory-server:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      DATABASE_URL: postgresql://bot:bot@postgres:5432/bot_memory
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:

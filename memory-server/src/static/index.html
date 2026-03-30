@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Řehoř — Bot Memory</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="app">
+  <header>
+    <img src="/static/icon.png" alt="Řehoř">
+    <h1>Řehoř</h1>
+    <div class="stats-bar" id="stats-bar"></div>
+  </header>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="tasks">Tasks</div>
+    <div class="tab" data-tab="memories">Memories</div>
+    <div class="tab" data-tab="search">Semantic Search</div>
+    <div class="tab" data-tab="viz">Embedding Map</div>
+  </div>
+
+  <!-- Tasks Panel -->
+  <div class="panel active" id="panel-tasks">
+    <div class="controls">
+      <select id="task-status-filter">
+        <option value="">All statuses</option>
+        <option value="in_progress">In Progress</option>
+        <option value="pr_open">PR Open</option>
+        <option value="pr_changes">PR Changes</option>
+        <option value="paused">Paused</option>
+        <option value="done">Done</option>
+      </select>
+    </div>
+    <div class="split-layout no-detail" id="tasks-split">
+      <div class="task-grid" id="task-list"></div>
+      <div class="detail-panel" id="task-detail" style="display:none"></div>
+    </div>
+  </div>
+
+  <!-- Memories Panel -->
+  <div class="panel" id="panel-memories">
+    <div class="controls">
+      <select id="mem-category-filter">
+        <option value="">All categories</option>
+        <option value="learning">Learning</option>
+        <option value="review_feedback">Review Feedback</option>
+        <option value="codebase_pattern">Codebase Pattern</option>
+      </select>
+      <select id="mem-repo-filter">
+        <option value="">All repos</option>
+      </select>
+      <select id="mem-tag-filter">
+        <option value="">All tags</option>
+      </select>
+    </div>
+    <div class="split-layout no-detail" id="memories-split">
+      <div class="memory-list" id="memory-list"></div>
+      <div class="detail-panel" id="memory-detail" style="display:none"></div>
+    </div>
+  </div>
+
+  <!-- Search Panel -->
+  <div class="panel" id="panel-search">
+    <div class="controls">
+      <input class="search-box" id="search-input" placeholder="Search memories semantically..." />
+      <button id="search-btn">Search</button>
+    </div>
+    <div class="split-layout no-detail" id="search-split">
+      <div class="memory-list" id="search-results"></div>
+      <div class="detail-panel" id="search-detail" style="display:none"></div>
+    </div>
+  </div>
+
+  <!-- Viz Panel -->
+  <div class="panel" id="panel-viz">
+    <div class="viz-split" id="viz-split">
+      <div>
+        <div class="viz-container" id="viz-container">
+          <div class="viz-tooltip" id="viz-tooltip"></div>
+        </div>
+        <div class="viz-legend" id="viz-legend"></div>
+        <div class="viz-hint">Drag to rotate. Scroll to zoom. Right-drag to pan. Click a point to inspect.</div>
+      </div>
+      <div class="detail-panel" id="viz-detail" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module" src="/static/app.js"></script>
+</body>
+</html>

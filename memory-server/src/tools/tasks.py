@@ -1,0 +1,179 @@
+import json
+from datetime import datetime, timezone
+from typing import Optional
+
+from fastmcp import FastMCP
+
+from ..db import get_pool
+from ..models import Task
+
+ACTIVE_STATUSES = ("in_progress", "pr_open", "pr_changes")
+MAX_ACTIVE = 5
+
+
+def _row_to_task(row) -> dict:
+    task = Task(
+        id=row["id"],
+        jira_key=row["jira_key"],
+        status=row["status"],
+        repo=row["repo"],
+        branch=row["branch"],
+        pr_number=row["pr_number"],
+        pr_url=row["pr_url"],
+        title=row.get("title"),
+        summary=row.get("summary"),
+        created_at=row["created_at"],
+        last_addressed=row["last_addressed"],
+        paused_reason=row["paused_reason"],
+        metadata=json.loads(row["metadata"]) if isinstance(row["metadata"], str) else (row["metadata"] or {}),
+    )
+    return task.model_dump(mode="json")
+
+
+def register_task_tools(mcp: FastMCP):
+
+    @mcp.tool()
+    async def task_list(status: Optional[str] = None) -> list[dict]:
+        """List tasks, optionally filtered by status."""
+        pool = get_pool()
+        if status:
+            rows = await pool.fetch(
+                "SELECT * FROM tasks WHERE status = $1::task_status ORDER BY created_at",
+                status,
+            )
+        else:
+            rows = await pool.fetch("SELECT * FROM tasks ORDER BY created_at")
+        return [_row_to_task(r) for r in rows]
+
+    @mcp.tool()
+    async def task_get(jira_key: str) -> dict | None:
+        """Get a single task by Jira key."""
+        pool = get_pool()
+        row = await pool.fetchrow("SELECT * FROM tasks WHERE jira_key = $1", jira_key)
+        return _row_to_task(row) if row else None
+
+    @mcp.tool()
+    async def task_add(
+        jira_key: str,
+        repo: str,
+        branch: str,
+        status: str = "in_progress",
+        pr_number: Optional[int] = None,
+        pr_url: Optional[str] = None,
+        title: Optional[str] = None,
+        summary: Optional[str] = None,
+        metadata: Optional[dict] = None,
+    ) -> dict:
+        """Add a new task. Fails if >= 5 active tasks exist.
+        title: Jira ticket title. summary: short description of what the bot is doing/did.
+        metadata: structured progress data (e.g. last_step, files_changed)."""
+        pool = get_pool()
+
+        # Check capacity
+        count = await pool.fetchval(
+            "SELECT COUNT(*) FROM tasks WHERE status = ANY($1)",
+            list(ACTIVE_STATUSES),
+        )
+        if count >= MAX_ACTIVE:
+            raise ValueError(
+                f"Cannot add task: {count} active tasks (max {MAX_ACTIVE}). "
+                "Complete or pause existing tasks first."
+            )
+
+        row = await pool.fetchrow(
+            """
+            INSERT INTO tasks (jira_key, status, repo, branch, pr_number, pr_url, title, summary, metadata)
+            VALUES ($1, $2::task_status, $3, $4, $5, $6, $7, $8, $9)
+            RETURNING *
+            """,
+            jira_key, status, repo, branch, pr_number, pr_url, title, summary,
+            json.dumps(metadata or {}),
+        )
+        return _row_to_task(row)
+
+    @mcp.tool()
+    async def task_update(
+        jira_key: str,
+        status: Optional[str] = None,
+        pr_number: Optional[int] = None,
+        pr_url: Optional[str] = None,
+        last_addressed: Optional[str] = None,
+        paused_reason: Optional[str] = None,
+        title: Optional[str] = None,
+        summary: Optional[str] = None,
+        metadata: Optional[dict] = None,
+    ) -> dict:
+        """Update fields on an existing task.
+        summary: human-readable description of current state/what was done.
+        metadata: structured progress data (e.g. last_step, files_changed, commits). Merged with existing metadata."""
+        pool = get_pool()
+
+        # Build dynamic SET clause
+        sets = []
+        params = []
+        idx = 1
+
+        if status is not None:
+            idx += 1
+            sets.append(f"status = ${idx}::task_status")
+            params.append(status)
+        if pr_number is not None:
+            idx += 1
+            sets.append(f"pr_number = ${idx}")
+            params.append(pr_number)
+        if pr_url is not None:
+            idx += 1
+            sets.append(f"pr_url = ${idx}")
+            params.append(pr_url)
+        if last_addressed is not None:
+            idx += 1
+            sets.append(f"last_addressed = ${idx}")
+            params.append(datetime.fromisoformat(last_addressed))
+        if paused_reason is not None:
+            idx += 1
+            sets.append(f"paused_reason = ${idx}")
+            params.append(paused_reason)
+        if title is not None:
+            idx += 1
+            sets.append(f"title = ${idx}")
+            params.append(title)
+        if summary is not None:
+            idx += 1
+            sets.append(f"summary = ${idx}")
+            params.append(summary)
+        if metadata is not None:
+            idx += 1
+            sets.append(f"metadata = metadata || ${idx}::jsonb")
+            params.append(json.dumps(metadata))
+
+        if not sets:
+            raise ValueError("No fields to update")
+
+        query = f"UPDATE tasks SET {', '.join(sets)} WHERE jira_key = $1 RETURNING *"
+        row = await pool.fetchrow(query, jira_key, *params)
+        if not row:
+            raise ValueError(f"Task {jira_key} not found")
+        return _row_to_task(row)
+
+    @mcp.tool()
+    async def task_remove(jira_key: str) -> dict:
+        """Remove a completed task."""
+        pool = get_pool()
+        result = await pool.execute("DELETE FROM tasks WHERE jira_key = $1", jira_key)
+        if result == "DELETE 0":
+            raise ValueError(f"Task {jira_key} not found")
+        return {"removed": True, "jira_key": jira_key}
+
+    @mcp.tool()
+    async def task_check_capacity() -> dict:
+        """Check if the bot can take on new work."""
+        pool = get_pool()
+        count = await pool.fetchval(
+            "SELECT COUNT(*) FROM tasks WHERE status = ANY($1)",
+            list(ACTIVE_STATUSES),
+        )
+        return {
+            "active": count,
+            "max": MAX_ACTIVE,
+            "has_capacity": count < MAX_ACTIVE,
+        }

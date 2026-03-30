@@ -1,0 +1,76 @@
+import logging
+from contextlib import asynccontextmanager
+from pathlib import Path
+
+from fastmcp import FastMCP
+from starlette.middleware.cors import CORSMiddleware
+from starlette.requests import Request
+from starlette.responses import FileResponse, HTMLResponse, JSONResponse
+
+from .db import close_pool, init_pool
+from .embeddings import load_model
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+STATIC_DIR = Path(__file__).parent / "static"
+
+
+@asynccontextmanager
+async def lifespan(app):
+    logger.info("Loading embedding model...")
+    load_model()
+    logger.info("Connecting to database...")
+    await init_pool()
+    logger.info("Memory server ready")
+    yield
+    await close_pool()
+
+
+mcp = FastMCP(
+    name="Bot Memory",
+    lifespan=lifespan,
+)
+
+# Register MCP tools
+from .tools.tasks import register_task_tools
+from .tools.rag import register_rag_tools
+
+register_task_tools(mcp)
+register_rag_tools(mcp)
+
+
+# Health check
+@mcp.custom_route("/health", methods=["GET"])
+async def health(request: Request) -> JSONResponse:
+    return JSONResponse({"status": "ok"})
+
+
+# Dashboard UI
+@mcp.custom_route("/", methods=["GET"])
+async def dashboard(request: Request) -> HTMLResponse:
+    html = (STATIC_DIR / "index.html").read_text()
+    return HTMLResponse(html)
+
+
+# Static files
+@mcp.custom_route("/static/{path:path}", methods=["GET"])
+async def static_files(request: Request) -> FileResponse:
+    file_path = STATIC_DIR / request.path_params["path"]
+    return FileResponse(file_path)
+
+
+# REST API for the dashboard
+from .api import api_tasks, api_memories, api_memory_search, api_memory_embeddings, api_memory_delete, api_tags, api_stats
+
+mcp.custom_route("/api/tasks", methods=["GET"])(api_tasks)
+mcp.custom_route("/api/memories", methods=["GET"])(api_memories)
+mcp.custom_route("/api/memories/search", methods=["GET"])(api_memory_search)
+mcp.custom_route("/api/memories/embeddings", methods=["GET"])(api_memory_embeddings)
+mcp.custom_route("/api/memories/{id}", methods=["DELETE"])(api_memory_delete)
+mcp.custom_route("/api/tags", methods=["GET"])(api_tags)
+mcp.custom_route("/api/stats", methods=["GET"])(api_stats)
+
+
+if __name__ == "__main__":
+    mcp.run(transport="sse", host="0.0.0.0", port=8080)

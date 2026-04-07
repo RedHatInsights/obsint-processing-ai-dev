@@ -11,6 +11,8 @@ services:
       test: ["CMD-SHELL", "pg_isready -U bot -d bot_memory"]
       interval: 5s
       retries: 5
+    networks:
+      - internal
 
   memory-server:
     build:
@@ -29,11 +31,32 @@ services:
       timeout: 5s
       retries: 30
       start_period: 120s
+    networks:
+      - internal
+      - external  # Needs internet for pip install at startup
+
+  proxy:
+    build:
+      context: ./proxy
+    healthcheck:
+      test: ["CMD-SHELL", "squidclient -h 127.0.0.1 -p 3128 mgr:info > /dev/null 2>&1 || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - internal
+      - external
 
   bot:
     build:
       context: .
       dockerfile: Dockerfile
+    security_opt:
+      - no-new-privileges
+    mem_limit: 4g
+    cpus: 4
+    pids_limit: 200
     env_file:
       - .env
     environment:
@@ -44,27 +67,31 @@ services:
       - BOT_LABEL=${BOT_LABEL:-hcc-ai-framework}
       - BOT_MEMORY_URL=http://memory-server:8080/sse
       - GOOGLE_APPLICATION_CREDENTIALS=/home/botuser/sa-key.json
+      # Route all HTTP/HTTPS through the Squid proxy
+      - HTTP_PROXY=http://proxy:3128
+      - HTTPS_PROXY=http://proxy:3128
+      - http_proxy=http://proxy:3128
+      - https_proxy=http://proxy:3128
+      # Internal services bypass the proxy
+      - NO_PROXY=memory-server,postgres,localhost,127.0.0.1
+      - no_proxy=memory-server,postgres,localhost,127.0.0.1
     stdin_open: true
     tty: true
     depends_on:
       memory-server:
         condition: service_healthy
-    command: >
-      bash -c "
-        echo $$SSH_PRIVATE_KEY_B64 | base64 -d > ~/.ssh/id_ed25519 &&
-        chmod 600 ~/.ssh/id_ed25519 &&
-        gpg --batch --import <(echo $$GPG_PRIVATE_KEY_B64 | base64 -d) 2>/dev/null &&
-        git config --global user.signingkey $$(gpg --list-secret-keys --keyid-format long 2>/dev/null | grep ed25519 | head -1 | awk '{print $$2}' | cut -d/ -f2) &&
-        echo $$GOOGLE_SA_KEY_B64 | base64 -d > /home/botuser/sa-key.json &&
-        sed -i 's|http://localhost:8080/sse|'$$BOT_MEMORY_URL'|' .mcp.json &&
-        gh config set git_protocol ssh --host github.com &&
-        /usr/lib64/chromium-browser/headless_shell --no-sandbox --disable-gpu --remote-debugging-port=9222 --remote-debugging-address=0.0.0.0 --ignore-certificate-errors --host-resolver-rules='MAP consent.trustarc.com 127.0.0.1' --no-first-run --disable-sync --disable-extensions --disable-popup-blocking &
-        until curl -s http://127.0.0.1:9222/json/version > /dev/null 2>&1; do sleep 1; done &&
-        echo 'Keys loaded. Chromium started. Starting bot with label: '$$BOT_LABEL &&
-        exec uv run dev-bot --label $$BOT_LABEL
-      "
+      proxy:
+        condition: service_healthy
+    networks:
+      - internal  # No 'external' network — bot can't reach the internet directly
 
 volumes:
   pgdata:
     name: memory-server_pgdata
     external: true
+
+networks:
+  internal:
+    internal: true  # No external gateway — containers can only reach each other
+  external:
+    driver: bridge  # Normal bridge with internet access — only proxy is on this

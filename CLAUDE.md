@@ -79,7 +79,7 @@ First, use `task_list` to get your tracked tasks. Scan ALL active tasks and tria
 2. **Interrupted work** — any task with status `in_progress` that has `metadata.last_step` set but no PR opened yet. The bot was interrupted mid-cycle and should resume and finish this work before starting anything new.
 3. **Investigation tasks without a report** — any `in_progress` task from a `needs-investigation` ticket where no analysis has been posted to Jira yet. Finish the investigation.
 4. **CVE investigations missing a container scan** — any `in_progress` CVE investigation task (`last_step = "investigation_posted"`) where the investigation did not include a `grype` container scan. Build the Dockerfile and run the scan as described in the CVE persona's verification steps. Update the Jira comment and task metadata with the scan results.
-5. **Failed tasks that can be retried** — any `in_progress` task where `metadata.last_step` indicates a failure that may now be resolved (e.g. `"push_failed"`, `"ci_failed"`). The underlying issue may have been fixed (e.g. fork configured, dependency updated). Retry the failed step. If it fails again with the same error, do not retry further — update `paused_reason` and move on.
+5. **Failed tasks that can be retried** — any `in_progress` task where `metadata.last_step` indicates a failure that may now be resolved (e.g. `"clone_failed"`, `"push_failed"`, `"ci_failed"`). The underlying issue may have been fixed (e.g. network restored, fork configured, dependency updated). Retry the failed step from the beginning. If it fails again with the same error, do not retry further — update `paused_reason` and move on.
 
 If none of these apply (all tasks are in a clean state with no pending feedback or incomplete work), proceed to Priority 1.
 
@@ -109,9 +109,11 @@ A task may have PRs/MRs across multiple repos (check `metadata.prs`). If `metada
 - Use `task_update` to set `last_addressed` to current time.
 
 **PR/MR review feedback:**
-- **GitHub**: Run `gh pr view <pr-number> --json reviews,comments,reviewThreads` to read review comments. Also read PR comments via `gh api repos/{owner}/{repo}/issues/{pr-number}/comments`.
+- **GitHub**: You MUST check BOTH sources of feedback — do not skip either one:
+  1. **Inline review comments**: Run `gh api repos/{owner}/{repo}/pulls/{pr-number}/comments` to get inline code review comments.
+  2. **General PR comments**: Run `gh api repos/{owner}/{repo}/issues/{pr-number}/comments` to get general conversation comments. These are where reviewers often ask for screenshots, request changes, or give high-level feedback. **Do NOT skip this step** — regular PR comments are just as important as inline reviews.
 - **GitLab**: Run `glab mr view <mr-number> --comments` to read MR comments and review notes.
-- **Only address NEW feedback.** Use `task_get` to check `last_addressed` for this task. Only process reviews and comments created AFTER that timestamp. If there is no new feedback since `last_addressed`, skip this check — it is in a clean state.
+- **Only address NEW feedback.** Use `task_get` to check `last_addressed` for this task. Only process reviews and comments created AFTER that timestamp. If there is no new feedback since `last_addressed`, skip this check — it is in a clean state. When comparing timestamps, ignore comments from the bot itself (author matches the bot's GitHub username).
 - Address each new piece of feedback, commit, and push.
 - If a reviewer asks for a screenshot or visual proof, follow the **Verification for UI changes** steps in the persona prompt: start the dev server (`node_modules/.bin/fec dev --clouddotEnv stage`), navigate to the relevant page using chrome-devtools MCP, and take a screenshot. **Never commit screenshots to the repo.** Upload them as GitHub Release assets to the bot's fork and reference the URLs in the PR comment. See the frontend persona's "Upload screenshots to the PR" instructions for the exact flow. Do NOT use Storybook or Chromatic — always use the real running application.
 - Reply to review comments via `gh`/`glab` explaining what you changed.
@@ -136,6 +138,10 @@ A task may have PRs/MRs across multiple repos (check `metadata.prs`). If `metada
   - **Duplicates**: If this ticket was a duplicate of another, comment on the other ticket that the fix has been merged with a link to the PR.
   - **Related**: Post a brief comment noting the related work is complete and linking the merged PR.
   - **Blocked tickets**: If other tickets were blocked by this one, comment that the blocker is resolved.
+- **Delete the bot branch**: After confirming the PR is merged, delete the remote branch to keep the repo clean:
+  - **GitHub**: `gh api repos/{owner}/{repo}/git/refs/heads/bot/{TICKET-KEY} -X DELETE` (targets the fork where the branch was pushed).
+  - **GitLab**: `glab api projects/:id/repository/branches/bot%2F{TICKET-KEY} -X DELETE` (URL-encode the `/`).
+  - Also delete the local branch: `git branch -D bot/{TICKET-KEY}`.
 - **Store learnings**: Use `memory_store` to save what you learned from the ticket. Store multiple memories if appropriate:
   - `category: "learning"` — what you learned about the problem domain, fix approach, or gotchas.
   - `category: "codebase_pattern"` — any repo structure, conventions, or patterns you discovered while working.

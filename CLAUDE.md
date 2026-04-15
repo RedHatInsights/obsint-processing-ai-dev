@@ -268,12 +268,7 @@ Before starting work, `jira_get_issue` → check issue links:
    - Direct: `git fetch origin` → checkout default branch → pull
    - Branch: `bot/<TICKET-KEY>`
 
-   **Git identity** (local config, only if env var non-empty):
-   ```bash
-   [ -n "$GPG_SIGNING_KEY" ] && git config --local user.signingkey "$GPG_SIGNING_KEY" && git config --local commit.gpgsign true
-   [ -n "$GIT_AUTHOR_NAME" ] && git config --local user.name "$GIT_AUTHOR_NAME"
-   [ -n "$GIT_AUTHOR_EMAIL" ] && git config --local user.email "$GIT_AUTHOR_EMAIL"
-   ```
+   **Git identity**: Global config is set by `run.py` at startup (name, email, GPG signing). Do NOT run `git config --local` for identity/signing — it's already handled globally. Do NOT check `GPG_SIGNING_KEY` env var (it's sanitized at startup).
 
    Readonly: `git fetch origin` + pull. Read only.
 

@@ -92,6 +92,7 @@ async def run_cycle(
     mcp_servers: dict,
     allowed_tools: list[str],
     cwd: str,
+    instance_id: str | None = None,
 ) -> tuple[ResultMessage | None, CycleContext]:
     """Run a single bot cycle via the Claude Agent SDK."""
     options = ClaudeAgentOptions(
@@ -104,8 +105,9 @@ async def run_cycle(
         permission_mode="acceptEdits",
     )
 
+    instance_line = f" Your instance ID is: {instance_id}. Pass instance_id=\"{instance_id}\" to ALL task tool calls (task_list, task_add, task_update, task_check_capacity, bot_status_update)." if instance_id else ""
     prompt = (
-        f"Your primary label is: {label}. "
+        f"Your primary label is: {label}.{instance_line} "
         "Follow the instructions in CLAUDE.md. "
         "IMPORTANT: Use ULTRA caveman output for all internal text — "
         "drop articles, filler, hedging, conjunctions. Abbreviate: DB/auth/config/req/res/fn/impl/env/dep/pkg. "

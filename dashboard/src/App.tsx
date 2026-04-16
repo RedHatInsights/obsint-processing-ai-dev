@@ -19,6 +19,7 @@ function AppInner() {
     message: 'Loading...',
     jira_key: null,
     repo: null,
+    instance_id: null,
     cycle_start: null,
     updated_at: new Date().toISOString(),
   });

@@ -60,6 +60,7 @@ export default function BotBanner({ status }: Props) {
           </a>
         )}
         {status.repo && <span className="banner-repo">{status.repo}</span>}
+        {status.instance_id && <span className="banner-instance">{status.instance_id}</span>}
         {elapsed && <span className="banner-elapsed">{elapsed}</span>}
         <span className="banner-updated" title={status.updated_at}>
           {timeAgo(status.updated_at)}

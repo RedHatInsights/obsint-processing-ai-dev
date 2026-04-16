@@ -152,6 +152,11 @@ def main() -> None:
         required=True,
         help="Primary Jira label (e.g. hcc-ai-framework)",
     )
+    parser.add_argument(
+        "--instance-id",
+        default=os.environ.get("BOT_INSTANCE_ID", ""),
+        help="Bot instance ID for multi-instance isolation (default: $BOT_INSTANCE_ID)",
+    )
     args = parser.parse_args()
 
     setup_logging()
@@ -181,9 +186,11 @@ def main() -> None:
     signal.signal(signal.SIGINT, shutdown)
     signal.signal(signal.SIGTERM, shutdown)
 
+    instance_id = args.instance_id or None
     logger.info(
-        "Dev bot started. Label: %s. Provider: Vertex AI. Active interval: %ds. Idle interval: %ds.",
+        "Dev bot started. Label: %s. Instance: %s. Provider: Vertex AI. Active interval: %ds. Idle interval: %ds.",
         args.label,
+        instance_id or "(none)",
         config.interval,
         config.idle_interval,
     )
@@ -199,6 +206,7 @@ def main() -> None:
                     mcp_servers=mcp_servers,
                     allowed_tools=ALLOWED_TOOLS,
                     cwd=str(SCRIPT_DIR),
+                    instance_id=instance_id,
                 )
             )
 

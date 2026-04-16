@@ -245,6 +245,14 @@ header {
 .banner-repo {
   color: var(--text-dim);
 }
+.banner-instance {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(188, 140, 255, 0.15);
+  color: var(--purple);
+  font-weight: 500;
+}
 .banner-elapsed {
   font-family: monospace;
   color: var(--yellow);
@@ -501,6 +509,16 @@ select:focus,
   color: var(--text-dim);
   margin-top: 4px;
   font-style: italic;
+}
+
+.task-instance {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(188, 140, 255, 0.12);
+  color: var(--purple);
+  margin-top: 4px;
+  display: inline-block;
 }
 
 .task-paused-reason {

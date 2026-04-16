@@ -52,6 +52,13 @@ EXCEPTION
     WHEN duplicate_column THEN NULL;
 END $$;
 
+-- Add instance_id column for multi-instance isolation
+DO $$ BEGIN
+    ALTER TABLE tasks ADD COLUMN IF NOT EXISTS instance_id TEXT;
+EXCEPTION
+    WHEN duplicate_column THEN NULL;
+END $$;
+
 -- Add tags column if it doesn't exist (for existing databases)
 DO $$ BEGIN
     ALTER TABLE memories ADD COLUMN IF NOT EXISTS tags TEXT[] DEFAULT '{}';
@@ -60,15 +67,23 @@ EXCEPTION
 END $$;
 
 CREATE TABLE IF NOT EXISTS bot_status (
-    id              INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+    id              INTEGER PRIMARY KEY DEFAULT 1,
     state           TEXT NOT NULL DEFAULT 'idle',
     message         TEXT NOT NULL DEFAULT '',
     jira_key        TEXT,
     repo            TEXT,
+    instance_id     TEXT,
     cycle_start     TIMESTAMPTZ,
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 INSERT INTO bot_status (id) VALUES (1) ON CONFLICT DO NOTHING;
+
+-- Add instance_id to bot_status for existing databases
+DO $$ BEGIN
+    ALTER TABLE bot_status ADD COLUMN IF NOT EXISTS instance_id TEXT;
+EXCEPTION
+    WHEN duplicate_column THEN NULL;
+END $$;
 
 CREATE TABLE IF NOT EXISTS cycles (
     id              SERIAL PRIMARY KEY,

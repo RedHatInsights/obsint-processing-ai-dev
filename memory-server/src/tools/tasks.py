@@ -26,6 +26,7 @@ def _row_to_task(row) -> dict:
         created_at=row["created_at"],
         last_addressed=row["last_addressed"],
         paused_reason=row["paused_reason"],
+        instance_id=row.get("instance_id"),
         metadata=json.loads(row["metadata"]) if isinstance(row["metadata"], str) else (row["metadata"] or {}),
     )
     return task.model_dump(mode="json")
@@ -34,20 +35,35 @@ def _row_to_task(row) -> dict:
 def register_task_tools(mcp: FastMCP):
 
     @mcp.tool()
-    async def task_list(status: Optional[str] = None, include_archived: bool = False) -> list[dict]:
-        """List tasks, optionally filtered by status. Archived tasks are excluded by default."""
+    async def task_list(
+        status: Optional[str] = None,
+        include_archived: bool = False,
+        instance_id: Optional[str] = None,
+    ) -> list[dict]:
+        """List tasks, optionally filtered by status and instance_id. Archived tasks are excluded by default.
+        instance_id: Filter to tasks owned by this bot instance. Omit to see all."""
         pool = get_pool()
+        conditions = []
+        params = []
+        idx = 0
+
         if status:
-            rows = await pool.fetch(
-                "SELECT * FROM tasks WHERE status = $1::task_status ORDER BY created_at",
-                status,
-            )
-        elif include_archived:
-            rows = await pool.fetch("SELECT * FROM tasks ORDER BY created_at")
-        else:
-            rows = await pool.fetch(
-                "SELECT * FROM tasks WHERE status != 'archived'::task_status ORDER BY created_at"
-            )
+            idx += 1
+            conditions.append(f"status = ${idx}::task_status")
+            params.append(status)
+        elif not include_archived:
+            conditions.append("status != 'archived'::task_status")
+
+        if instance_id:
+            idx += 1
+            conditions.append(f"(instance_id = ${idx} OR instance_id IS NULL)")
+            params.append(instance_id)
+
+        where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        rows = await pool.fetch(
+            f"SELECT * FROM tasks {where} ORDER BY created_at",
+            *params,
+        )
         return [_row_to_task(r) for r in rows]
 
     @mcp.tool()
@@ -68,19 +84,30 @@ def register_task_tools(mcp: FastMCP):
         title: Optional[str] = None,
         summary: Optional[str] = None,
         metadata: Optional[dict] = None,
+        instance_id: Optional[str] = None,
     ) -> dict:
-        """Add a new task. Fails if >= 5 active tasks exist.
+        """Add a new task. Fails if >= 10 active tasks exist for this instance.
         title: Jira ticket title. summary: short description of what the bot is doing/did.
         metadata: structured progress data (e.g. last_step, files_changed).
+        instance_id: Bot instance name — used for multi-instance isolation.
         For multi-repo tickets, include repos list and prs array in metadata:
         {"repos": ["repo1", "repo2"], "prs": [{"repo": "repo1", "number": 42, "url": "...", "host": "github"}]}"""
         pool = get_pool()
 
-        # Check capacity
-        count = await pool.fetchval(
-            "SELECT COUNT(*) FROM tasks WHERE status = ANY($1)",
-            list(ACTIVE_STATUSES),
-        )
+        if isinstance(metadata, str):
+            metadata = json.loads(metadata)
+
+        # Check capacity (scoped to instance if provided)
+        if instance_id:
+            count = await pool.fetchval(
+                "SELECT COUNT(*) FROM tasks WHERE status = ANY($1) AND (instance_id = $2 OR instance_id IS NULL)",
+                list(ACTIVE_STATUSES), instance_id,
+            )
+        else:
+            count = await pool.fetchval(
+                "SELECT COUNT(*) FROM tasks WHERE status = ANY($1)",
+                list(ACTIVE_STATUSES),
+            )
         if count >= MAX_ACTIVE:
             raise ValueError(
                 f"Cannot add task: {count} active tasks (max {MAX_ACTIVE}). "
@@ -91,15 +118,15 @@ def register_task_tools(mcp: FastMCP):
             metadata = json.loads(metadata)
         row = await pool.fetchrow(
             """
-            INSERT INTO tasks (jira_key, status, repo, branch, pr_number, pr_url, title, summary, metadata)
-            VALUES ($1, $2::task_status, $3, $4, $5, $6, $7, $8, $9)
+            INSERT INTO tasks (jira_key, status, repo, branch, pr_number, pr_url, title, summary, instance_id, metadata)
+            VALUES ($1, $2::task_status, $3, $4, $5, $6, $7, $8, $9, $10)
             RETURNING *
             """,
             jira_key, status, repo, branch, pr_number, pr_url, title, summary,
-            json.dumps(metadata or {}),
+            instance_id, json.dumps(metadata or {}),
         )
         result = _row_to_task(row)
-        await bus.publish(Event("task_added", {"jira_key": jira_key, "title": title, "status": status}))
+        await bus.publish(Event("task_added", {"jira_key": jira_key, "title": title, "status": status, "instance_id": instance_id}))
         return result
 
     @mcp.tool()
@@ -187,13 +214,20 @@ def register_task_tools(mcp: FastMCP):
         return result
 
     @mcp.tool()
-    async def task_check_capacity() -> dict:
-        """Check if the bot can take on new work."""
+    async def task_check_capacity(instance_id: Optional[str] = None) -> dict:
+        """Check if the bot can take on new work.
+        instance_id: Scope capacity check to this instance."""
         pool = get_pool()
-        count = await pool.fetchval(
-            "SELECT COUNT(*) FROM tasks WHERE status = ANY($1)",
-            list(ACTIVE_STATUSES),
-        )
+        if instance_id:
+            count = await pool.fetchval(
+                "SELECT COUNT(*) FROM tasks WHERE status = ANY($1) AND (instance_id = $2 OR instance_id IS NULL)",
+                list(ACTIVE_STATUSES), instance_id,
+            )
+        else:
+            count = await pool.fetchval(
+                "SELECT COUNT(*) FROM tasks WHERE status = ANY($1)",
+                list(ACTIVE_STATUSES),
+            )
         return {
             "active": count,
             "max": MAX_ACTIVE,
@@ -206,28 +240,32 @@ def register_task_tools(mcp: FastMCP):
         message: str,
         jira_key: Optional[str] = None,
         repo: Optional[str] = None,
+        instance_id: Optional[str] = None,
     ) -> dict:
         """Update the bot's current activity status. Call this at the start and end of each cycle,
         and when switching between tasks.
         state: 'working', 'idle', 'error'.
         message: Human-readable description of what the bot is doing right now.
         jira_key: The ticket being worked on (if any).
-        repo: The repo being worked in (if any)."""
+        repo: The repo being worked in (if any).
+        instance_id: Bot instance name for multi-instance setups."""
         pool = get_pool()
         row = await pool.fetchrow(
             """
             UPDATE bot_status SET state = $1, message = $2, jira_key = $3, repo = $4,
+                instance_id = COALESCE($5, instance_id),
                 cycle_start = CASE WHEN state = 'idle' AND $1 = 'working' THEN NOW() ELSE cycle_start END,
                 updated_at = NOW()
             WHERE id = 1 RETURNING *
             """,
-            state, message, jira_key, repo,
+            state, message, jira_key, repo, instance_id,
         )
         result = {
             "state": row["state"],
             "message": row["message"],
             "jira_key": row["jira_key"],
             "repo": row["repo"],
+            "instance_id": row.get("instance_id"),
             "cycle_start": row["cycle_start"].isoformat() if row["cycle_start"] else None,
             "updated_at": row["updated_at"].isoformat(),
         }

@@ -17,6 +17,7 @@ export interface Task {
   created_at: string;
   last_addressed: string;
   paused_reason: string | null;
+  instance_id: string | null;
   metadata: Record<string, any>;
   slack_notification?: SlackNotification;
 }
@@ -39,6 +40,7 @@ export interface BotStatus {
   message: string;
   jira_key: string | null;
   repo: string | null;
+  instance_id: string | null;
   cycle_start: string | null;
   updated_at: string;
 }

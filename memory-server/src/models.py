@@ -17,6 +17,7 @@ class Task(BaseModel):
     created_at: datetime
     last_addressed: datetime
     paused_reason: str | None = None
+    instance_id: str | None = None
     metadata: dict[str, Any] = {}
 
 

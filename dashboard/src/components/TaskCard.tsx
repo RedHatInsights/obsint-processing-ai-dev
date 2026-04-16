@@ -62,6 +62,11 @@ export default function TaskCard({ task, selected, onClick }: Props) {
         )}
       </div>
       {step && <div className="task-step">Step: {step}</div>}
+      {task.instance_id && (
+        <span className="task-instance" title={`Instance: ${task.instance_id}`}>
+          {task.instance_id}
+        </span>
+      )}
       {task.paused_reason && (
         <div className="task-paused-reason">{task.paused_reason}</div>
       )}

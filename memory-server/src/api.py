@@ -262,6 +262,7 @@ async def api_bot_status(request: Request) -> JSONResponse:
         "message": row["message"],
         "jira_key": row["jira_key"],
         "repo": row["repo"],
+        "instance_id": row.get("instance_id"),
         "cycle_start": row["cycle_start"].isoformat() if row["cycle_start"] else None,
         "updated_at": row["updated_at"].isoformat(),
     })
@@ -621,6 +622,7 @@ def _task(row, slack_notif=None) -> dict:
         "created_at": row["created_at"].isoformat(),
         "last_addressed": row["last_addressed"].isoformat(),
         "paused_reason": row["paused_reason"],
+        "instance_id": row.get("instance_id"),
         "metadata": json.loads(row["metadata"]) if isinstance(row["metadata"], str) else (row["metadata"] or {}),
     }
     if slack_notif:

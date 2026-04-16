@@ -22,6 +22,9 @@ memory-server/src/static/assets/
 memory-server/src/static/index.html
 memory-server/src/static/app.js
 memory-server/src/static/style.css
+
+# Secrets and credentials
 sa-key.json
 .ssh/
 .gitconfig
+bot/mcp.json

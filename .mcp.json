@@ -1,5 +1,17 @@
 {
   "mcpServers": {
+    "mcp-atlassian": {
+      "command": "uvx",
+      "args": [
+        "mcp-atlassian"
+      ],
+      "env": {
+        "JIRA_URL": "${JIRA_URL}",
+        "JIRA_USERNAME": "${JIRA_USERNAME}",
+        "JIRA_API_TOKEN": "${JIRA_API_TOKEN}"
+      },
+      "type": "stdio"
+    },
     "chrome-devtools": {
       "command": "chrome-devtools-mcp",
       "args": ["--browserUrl", "http://127.0.0.1:9222", "--acceptInsecureCerts"]

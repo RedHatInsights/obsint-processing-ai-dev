@@ -35,6 +35,8 @@ Use `syft` to inspect the production image (checks runtime dependencies, not jus
 syft quay.io/redhat-services-prod/obsint-processing-tenant/<component>/<component>:latest --from registry -o json
 ```
 
+**Note**: `syft` works with both Docker and Podman. The `--from registry` flag pulls directly from the registry without requiring a local container runtime.
+
 If package appears in syft but NOT in source dependency files → installed at build time (base image).
 If package doesn't appear in syft at all → NOT AFFECTED (not present in runtime).
 
@@ -222,7 +224,11 @@ Backend repos (Python/Golang) manage their own base images in their `Dockerfile`
    - Or: `FROM python:3.11-slim` → `FROM python:3.12-slim` (if compatible)
 
 3. **Rebuild and test**:
-   - Build the Docker image: `docker build . -t <repo-name>:cve-test`
+   - Build the container image (use podman or docker):
+     ```bash
+     CONTAINER_CMD=$(command -v podman || command -v docker)
+     $CONTAINER_CMD build . -t <repo-name>:cve-test
+     ```
    - Ensure it builds successfully
    - Run tests in the container if applicable
 
@@ -303,9 +309,13 @@ Look for recent bump commits. If the package was bumped in the last 30 days, the
 
 After any CVE fix (whether npm, Python, Golang, or base image), verify the built container image is clean:
 
+**Container Runtime**: Use `podman` if available, otherwise fall back to `docker`. Check with `command -v podman || command -v docker`.
+
 1. **Build the image**:
    ```bash
-   docker build . -t <repo-name>:audit
+   # Check which container runtime is available
+   CONTAINER_CMD=$(command -v podman || command -v docker)
+   $CONTAINER_CMD build . -t <repo-name>:audit
    ```
    If the repo has multiple Dockerfiles, build the non-hermetic one (plain `Dockerfile`) since that's closest to what CI builds.
 
@@ -326,12 +336,12 @@ After any CVE fix (whether npm, Python, Golang, or base image), verify the built
 
 4. **Clean up**:
    ```bash
-   docker rmi <repo-name>:audit
+   $CONTAINER_CMD rmi <repo-name>:audit
    ```
 
 5. **Report results**: Include both syft version confirmation and grype scan summary in the PR description and Jira resolution comment.
 
-If `grype` or `syft` are not installed, skip those scans and note in the PR description that manual verification with container scanners is needed.
+If `grype` or `syft` are not installed, skip those scans and note in the PR description that manual verification with container scanners is needed. If neither `podman` nor `docker` is available, skip container scanning entirely and note in the PR.
 
 ---
 

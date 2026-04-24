@@ -116,5 +116,16 @@
   "api-documentation-frontend": {
     "url": "git@github.com-bot:platex-rehor-bot/api-documentation-frontend.git",
     "upstream": "git@github.com:RedHatInsights/api-documentation-frontend.git"
+  },
+
+
+
+  "content-service": {
+    "url": "git@github.com:matysek/content-service.git",
+    "upstream": "git@github.com:RedHatInsights/content-service.git"
+  },
+  "insights-operator-gathering-conditions-service": {
+    "url": "git@github.com:matysek/insights-operator-gathering-conditions-service.git",
+    "upstream": "git@github.com:RedHatInsights/insights-operator-gathering-conditions-service.git"
   }
 }

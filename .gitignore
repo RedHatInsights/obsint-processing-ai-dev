@@ -1,6 +1,7 @@
 repos/
 .credentials
 .env
+.env.local
 extensions/
 data/*
 !data/.gitkeep

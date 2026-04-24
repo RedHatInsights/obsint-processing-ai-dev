@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: pgvector/pgvector:pg17
+    image: docker.io/pgvector/pgvector:pg17
     environment:
       POSTGRES_DB: bot_memory
       POSTGRES_USER: bot

@@ -22,10 +22,16 @@ log "Using container runtime: $CONTAINER_RT"
 
 log "Checking LSP dependencies..."
 
-# TypeScript LSP
+# TypeScript LSP — install to local prefix if global is not writable
 if ! command -v typescript-language-server &>/dev/null; then
   log "Installing typescript-language-server..."
-  npm install -g typescript-language-server typescript
+  npm install -g typescript-language-server typescript 2>/dev/null || {
+    log "Global install failed (permission denied). Installing to ~/.local prefix..."
+    npm config set prefix "$HOME/.local"
+    npm install -g typescript-language-server typescript
+    # Ensure ~/.local/bin is on PATH for this session
+    export PATH="$HOME/.local/bin:$PATH"
+  }
 fi
 
 log "LSP servers ready."

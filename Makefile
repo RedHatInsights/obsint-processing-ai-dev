@@ -1,6 +1,6 @@
 .PHONY: install run init dashboard costs costs-today costs-week seed-costs stop logs help memory-server memory-server-stop memory-dump memory-import memory-reset
 
-LABEL ?= hcc-ai-framework
+LABEL ?= obsint-processing-ai
 CONTAINER_RT ?= $(shell command -v docker 2>/dev/null && echo docker || echo podman)
 
 help: ## Show this help

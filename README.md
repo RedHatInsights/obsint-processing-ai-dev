@@ -10,7 +10,7 @@ Before setting up the bot, make sure you have the following installed:
 |------------|---------|---------|
 | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | Agent runtime (bundled with the SDK) | `npm install -g @anthropic-ai/claude-code` |
 | [uv](https://docs.astral.sh/uv/) | Python package manager | `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
-| [Docker](https://docs.docker.com/get-docker/) + Docker Compose | Memory server, target repo dev environments | Install Docker Desktop |
+| [Docker](https://docs.docker.com/get-docker/) or [Podman](https://podman.io/) + Compose | Memory server, target repo dev environments | Install Docker Desktop or `dnf install podman podman-compose` |
 | [Node.js](https://nodejs.org/) + npm | TypeScript LSP server | `brew install node` or via nvm |
 | [jq](https://jqlang.github.io/jq/) | JSON processing | `brew install jq` |
 | [gh](https://cli.github.com/) | GitHub CLI | `brew install gh` then `gh auth login` (use SSH protocol) |
@@ -56,6 +56,8 @@ cp .env.example .env  # then edit with your values
 # 4. Run the bot for a specific team label
 make run LABEL=hcc-ai-framework
 ```
+
+> **Podman users:** If you're running inside a toolbox container, run `make init` from the host instead — podman compose needs direct access to the host's container runtime. If you hit pause process errors, run `podman system migrate` on the host first.
 
 The bot will start polling for Jira tickets with the `hcc-ai-framework` label. It logs to stdout and `bot.log`.
 
